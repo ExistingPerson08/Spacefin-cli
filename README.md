@@ -1,4 +1,4 @@
-# Spacefin-themes
-This is collection with full themes (both layout and Cosmic theme) and python script for setting them for [Spacefin](https://github.com/ExistingPerson08/Spacefin). Script is made for Spacefin but it should work on any distro. Script requires Python 3.8 or newer.
+# Spacefin-cli
+This is collection with full themes (both layout and Cosmic theme), development enviroments and aliases and python script for setting them for [Spacefin](https://github.com/ExistingPerson08/Spacefin). Script is made for Spacefin but it should work on any distro. Script requires Python 3.8 or newer.
 
-You can add your own themes, just make pull request ;).
+You can add your own themes, enviroments or aliases, just make pull request ;).
