@@ -1,0 +1,8 @@
+{
+  "brew": [
+    "python@3.11",
+    "pipx",
+    "poetry",
+    "uv"
+  ]
+}

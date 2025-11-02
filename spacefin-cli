@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import tempfile
+import shutil
+import argparse
+import json
+import shlex
+
+# --- Configuration ---
+DEFAULT_REPO_URL = "https://github.com/ExistingPerson08/Spacefin-themes.git"
+REPO_FOLDER_NAME = "spacefin-assets"
+HOME_DIR = os.path.expanduser("~")
+
+# --- Helper Functions ---
+
+def confirm_user_repo(repo_url):
+    """Warns user about custom repo and asks for confirmation."""
+    print(f"⚠️  WARNING: You are about to use a custom repository:")
+    print(f"   {repo_url}")
+    print("   This could be insecure. Only proceed if you trust the source.")
+    try:
+        # Handle piped input or Ctrl+D
+        choice = input("   Do you want to continue? [y/N]: ").strip().lower()
+    except EOFError:
+        choice = 'n'
+
+    if choice != 'y':
+        print("❌ Aborting.")
+        sys.exit(0)
+    print("✅ Proceeding with custom repository.")
+
+def clone_repo(repo_url, temp_dir):
+    """Clones the repository and returns the path to the cloned folder."""
+    clone_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
+    print(f"🌍 Cloning repository from {repo_url}...")
+
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", repo_url, clone_path],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+        )
+        return clone_path
+    except FileNotFoundError:
+        print(f"❌ ERROR: 'git' command not found. Please make sure git is installed.")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ ERROR: Failed to clone repository.")
+        if e.stderr:
+            print(f"   Details: {e.stderr.strip()}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: An unexpected error occurred during cloning: {e}")
+        sys.exit(1)
+
+def run_command(command_args):
+    """Runs a shell command, prints output, and exits on failure."""
+    command_for_log = " ".join(shlex.quote(s) for s in command_args)
+    print(f"🚀 Running command: {command_for_log}")
+    try:
+        # Run and stream output
+        with subprocess.Popen(
+            command_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding='utf-8',
+            bufsize=1
+        ) as proc:
+            if proc.stdout:
+                for line in proc.stdout:
+                    print(f"   > {line.strip()}", flush=True)
+
+            proc.wait() # Wait for the process to complete
+
+            if proc.returncode != 0:
+                print(f"❌ ERROR: Command failed with exit code {proc.returncode}")
+                sys.exit(1)
+
+    except FileNotFoundError:
+        print(f"❌ ERROR: Command not found: {command_args[0]}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: Failed to run command: {e}")
+        sys.exit(1)
+
+
+def list_available(path, item_type):
+    """Lists available items (themes/languages) from a given directory."""
+    print(f"\nAvailable {item_type}:")
+    if not os.path.isdir(path):
+        print(f"   (Could not find '{item_type}' directory in repository)")
+        return
+    try:
+        items = []
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
+            # Check if it is a directory and not hidden
+            if os.path.isdir(item_path) and not item.startswith("."):
+                items.append(item)
+
+        if not items:
+            print(f"   (No {item_type} found)")
+        else:
+            for item in sorted(items):
+                print(f"  - {item}")
+    except OSError as e:
+        print(f"   (Error listing {item_type}: {e})")
+
+def safe_copy_tree(source, dest, ignore_patterns=None):
+    """Wrapper for shutil.copytree with dirs_exist_ok and error handling."""
+    print(f"📂 Copying files from '{os.path.basename(source)}' to '{dest}'...")
+    try:
+        shutil.copytree(source, dest, dirs_exist_ok=True, ignore=ignore_patterns)
+    except TypeError:
+        # Fallback for Python < 3.8 which lacks dirs_exist_ok
+        print("⚠️  WARNING: Your Python version is older (pre-3.8).")
+        print("    Falling back to less robust copy method.")
+        try:
+            from distutils.dir_util import copy_tree
+            copy_tree(source, dest)
+        except ImportError:
+            print("❌ ERROR: 'distutils' not found. Cannot copy files on this Python version.")
+            print("   Please upgrade to Python 3.8 or newer.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ ERROR: Failed to copy files with distutils fallback: {e}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: Failed to copy files.")
+        print(f"   Details: {e}")
+        sys.exit(1)
+
+# --- Main Handlers ---
+
+def handle_theme(theme_name, clone_path):
+    """Handles the installation of a theme."""
+    print(f"🔄 Installing theme: {theme_name}")
+    themes_dir = os.path.join(clone_path, "themes")
+    source_dir = os.path.join(themes_dir, theme_name)
+
+    if not os.path.isdir(source_dir):
+        print(f"❌ ERROR: Theme '{theme_name}' not found in repository.")
+        list_available(themes_dir, "themes")
+        sys.exit(1)
+
+    # Copy all contents from source_dir to HOME_DIR
+    safe_copy_tree(source_dir, HOME_DIR)
+    print(f"🎉 Done! Theme '{theme_name}' applied.")
+
+def handle_language(lang_name, clone_path):
+    """Handles the installation of a language environment."""
+    print(f"🔄 Installing language environment: {lang_name}")
+    lang_dir = os.path.join(clone_path, "languages")
+    source_dir = os.path.join(lang_dir, lang_name)
+
+    if not os.path.isdir(source_dir):
+        print(f"❌ ERROR: Language '{lang_name}' not found in repository.")
+        list_available(lang_dir, "languages")
+        sys.exit(1)
+
+    packages_json_path = os.path.join(source_dir, "packages.json")
+    commands_json_path = os.path.join(source_dir, "commands.json")
+
+    # 1. Install Packages
+    if os.path.exists(packages_json_path):
+        print("Found 'packages.json', processing...")
+        try:
+            with open(packages_json_path, "r", encoding='utf-8') as f:
+                packages_data = json.load(f)
+
+            # Example: only 'brew' is supported, based on original script
+            brew_packages = packages_data.get("brew")
+            if brew_packages and isinstance(brew_packages, list):
+                print("Installing Homebrew packages...")
+                run_command(["brew", "install"] + brew_packages)
+            # Future: add "apt", "pacman" etc. here
+
+        except json.JSONDecodeError:
+            print(f"❌ ERROR: 'packages.json' for '{lang_name}' is corrupt.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ ERROR: Failed processing 'packages.json': {e}")
+            sys.exit(1)
+    else:
+        print("No 'packages.json' found, skipping package installation.")
+
+    # 2. Run Commands
+    if os.path.exists(commands_json_path):
+        print("Found 'commands.json', processing...")
+        try:
+            with open(commands_json_path, "r", encoding='utf-8') as f:
+                commands_list = json.load(f)
+
+            if commands_list and isinstance(commands_list, list):
+                print("Running setup commands...")
+                for cmd_str in commands_list:
+                    if not isinstance(cmd_str, str):
+                        print(f"⚠️  WARNING: Skipping non-string command in 'commands.json': {cmd_str}")
+                        continue
+                    try:
+                        # Split command string into arguments
+                        cmd_args = shlex.split(cmd_str)
+                        if cmd_args: # Ensure not an empty string
+                            run_command(cmd_args)
+                    except ValueError as e:
+                        print(f"❌ ERROR: Badly formatted command in 'commands.json': {cmd_str}")
+                        print(f"   Details: {e}")
+                        sys.exit(1)
+
+        except json.JSONDecodeError:
+            print(f"❌ ERROR: 'commands.json' for '{lang_name}' is corrupt.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ ERROR: Failed processing 'commands.json': {e}")
+            sys.exit(1)
+    else:
+        print("No 'commands.json' found, skipping setup commands.")
+
+    # 3. Copy Config Files (everything *except* the JSON files)
+    print(f"Copying configuration files to {HOME_DIR}...")
+    ignore_files = shutil.ignore_patterns("packages.json", "commands.json")
+    safe_copy_tree(source_dir, HOME_DIR, ignore_patterns=ignore_files)
+
+    print(f"🎉 Done! Language '{lang_name}' environment setup complete.")
+
+# --- Main Execution ---
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="spacefin-cli: A tool to set up themes and language environments.",
+        epilog="Example: spacefin-cli theme dracula"
+    )
+    parser.add_argument(
+        "--user",
+        metavar="REPO_URL",
+        help="Use a custom repository URL instead of the default."
+    )
+
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        title="Commands",
+        metavar="<command>",
+        help="The action to perform."
+    )
+
+    # 'theme' subcommand
+    theme_parser = subparsers.add_parser(
+        "theme",
+        help="Install a theme.",
+        description="Clones the repo, finds the theme in the 'themes/' folder, "
+                    "and copies its contents to your home directory (~/)."
+    )
+    theme_parser.add_argument(
+        "name",
+        help="Name of the theme to install (e.g., 'dracula')."
+    )
+
+    # 'language' subcommand
+    lang_parser = subparsers.add_parser(
+        "language",
+        help="Install a language environment.",
+        description="Clones the repo, finds the language in the 'languages/' folder, "
+                    "installs packages from 'packages.json', runs commands from "
+                    "'commands.json', and copies all other config files "
+                    "to your home directory (~/)."
+    )
+    lang_parser.add_argument(
+        "name",
+        help="Name of the language to set up (e.g., 'python')."
+    )
+
+    # Handle case where no arguments are given
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+
+    args = parser.parse_args()
+
+    # Determine repository URL
+    if args.user:
+        confirm_user_repo(args.user)
+        repo_url = args.user
+    else:
+        repo_url = DEFAULT_REPO_URL
+
+    # Use a temporary directory for cloning
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            clone_path = clone_repo(repo_url, temp_dir)
+
+            # Dispatch to a handler based on the subcommand
+            if args.command == "theme":
+                handle_theme(args.name, clone_path)
+            elif args.command == "language":
+                handle_language(args.name, clone_path)
+
+        except Exception as e:
+            print(f"❌ An unexpected critical error occurred: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+if __name__ == "__main__":
+    main()
