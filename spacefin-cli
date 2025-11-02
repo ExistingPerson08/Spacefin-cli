@@ -8,31 +8,30 @@ import argparse
 import json
 import shlex
 
-# --- Configuration ---
+# Config
 DEFAULT_REPO_URL = "https://github.com/ExistingPerson08/Spacefin-themes.git"
 REPO_FOLDER_NAME = "spacefin-assets"
 HOME_DIR = os.path.expanduser("~")
 
-# --- Helper Functions ---
 
 def confirm_user_repo(repo_url):
-    """Warns user about custom repo and asks for confirmation."""
+    """Confirm user repository."""
     print(f"⚠️  WARNING: You are about to use a custom repository:")
     print(f"   {repo_url}")
     print("   This could be insecure. Only proceed if you trust the source.")
     try:
-        # Handle piped input or Ctrl+D
         choice = input("   Do you want to continue? [y/N]: ").strip().lower()
     except EOFError:
-        choice = 'n'
+        choice = "n"
 
-    if choice != 'y':
+    if choice != "y":
         print("❌ Aborting.")
         sys.exit(0)
-    print("✅ Proceeding with custom repository.")
+    print("Proceeding with custom repository.")
+
 
 def clone_repo(repo_url, temp_dir):
-    """Clones the repository and returns the path to the cloned folder."""
+    """Clone repository"""
     clone_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
     print(f"🌍 Cloning repository from {repo_url}...")
 
@@ -42,7 +41,7 @@ def clone_repo(repo_url, temp_dir):
             check=True,
             capture_output=True,
             text=True,
-            encoding='utf-8',
+            encoding="utf-8",
         )
         return clone_path
     except FileNotFoundError:
@@ -57,10 +56,11 @@ def clone_repo(repo_url, temp_dir):
         print(f"❌ ERROR: An unexpected error occurred during cloning: {e}")
         sys.exit(1)
 
+
 def run_command(command_args):
-    """Runs a shell command, prints output, and exits on failure."""
+    """Run a shell command"""
     command_for_log = " ".join(shlex.quote(s) for s in command_args)
-    print(f"🚀 Running command: {command_for_log}")
+    print(f"Running command: {command_for_log}")
     try:
         # Run and stream output
         with subprocess.Popen(
@@ -68,14 +68,14 @@ def run_command(command_args):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            encoding='utf-8',
-            bufsize=1
+            encoding="utf-8",
+            bufsize=1,
         ) as proc:
             if proc.stdout:
                 for line in proc.stdout:
                     print(f"   > {line.strip()}", flush=True)
 
-            proc.wait() # Wait for the process to complete
+            proc.wait()  # Wait for the process to complete
 
             if proc.returncode != 0:
                 print(f"❌ ERROR: Command failed with exit code {proc.returncode}")
@@ -90,7 +90,7 @@ def run_command(command_args):
 
 
 def list_available(path, item_type):
-    """Lists available items (themes/languages) from a given directory."""
+    """Lists available items (themes/languages)"""
     print(f"\nAvailable {item_type}:")
     if not os.path.isdir(path):
         print(f"   (Could not find '{item_type}' directory in repository)")
@@ -111,7 +111,8 @@ def list_available(path, item_type):
     except OSError as e:
         print(f"   (Error listing {item_type}: {e})")
 
-def safe_copy_tree(source, dest, ignore_patterns=None):
+
+def copy(source, dest, ignore_patterns=None):
     """Wrapper for shutil.copytree with dirs_exist_ok and error handling."""
     print(f"📂 Copying files from '{os.path.basename(source)}' to '{dest}'...")
     try:
@@ -122,9 +123,12 @@ def safe_copy_tree(source, dest, ignore_patterns=None):
         print("    Falling back to less robust copy method.")
         try:
             from distutils.dir_util import copy_tree
+
             copy_tree(source, dest)
         except ImportError:
-            print("❌ ERROR: 'distutils' not found. Cannot copy files on this Python version.")
+            print(
+                "❌ ERROR: 'distutils' not found. Cannot copy files on this Python version."
+            )
             print("   Please upgrade to Python 3.8 or newer.")
             sys.exit(1)
         except Exception as e:
@@ -135,7 +139,9 @@ def safe_copy_tree(source, dest, ignore_patterns=None):
         print(f"   Details: {e}")
         sys.exit(1)
 
-# --- Main Handlers ---
+
+# Main functions
+
 
 def handle_theme(theme_name, clone_path):
     """Handles the installation of a theme."""
@@ -148,9 +154,15 @@ def handle_theme(theme_name, clone_path):
         list_available(themes_dir, "themes")
         sys.exit(1)
 
-    # Copy all contents from source_dir to HOME_DIR
-    safe_copy_tree(source_dir, HOME_DIR)
+    copy(source_dir, HOME_DIR)
     print(f"🎉 Done! Theme '{theme_name}' applied.")
+
+    try:
+        run_command(["killall", "cosmic-panel"])
+    except Exception as e:
+        print(f"Please, log out and log back to prevent issues.")
+        sys.exit(1)
+
 
 def handle_language(lang_name, clone_path):
     """Handles the installation of a language environment."""
@@ -166,11 +178,10 @@ def handle_language(lang_name, clone_path):
     packages_json_path = os.path.join(source_dir, "packages.json")
     commands_json_path = os.path.join(source_dir, "commands.json")
 
-    # 1. Install Packages
     if os.path.exists(packages_json_path):
         print("Found 'packages.json', processing...")
         try:
-            with open(packages_json_path, "r", encoding='utf-8') as f:
+            with open(packages_json_path, "r", encoding="utf-8") as f:
                 packages_data = json.load(f)
 
             # Example: only 'brew' is supported, based on original script
@@ -189,26 +200,29 @@ def handle_language(lang_name, clone_path):
     else:
         print("No 'packages.json' found, skipping package installation.")
 
-    # 2. Run Commands
     if os.path.exists(commands_json_path):
         print("Found 'commands.json', processing...")
         try:
-            with open(commands_json_path, "r", encoding='utf-8') as f:
+            with open(commands_json_path, "r", encoding="utf-8") as f:
                 commands_list = json.load(f)
 
             if commands_list and isinstance(commands_list, list):
                 print("Running setup commands...")
                 for cmd_str in commands_list:
                     if not isinstance(cmd_str, str):
-                        print(f"⚠️  WARNING: Skipping non-string command in 'commands.json': {cmd_str}")
+                        print(
+                            f"⚠️  WARNING: Skipping non-string command in 'commands.json': {cmd_str}"
+                        )
                         continue
                     try:
                         # Split command string into arguments
                         cmd_args = shlex.split(cmd_str)
-                        if cmd_args: # Ensure not an empty string
+                        if cmd_args:  # Ensure not an empty string
                             run_command(cmd_args)
                     except ValueError as e:
-                        print(f"❌ ERROR: Badly formatted command in 'commands.json': {cmd_str}")
+                        print(
+                            f"❌ ERROR: Badly formatted command in 'commands.json': {cmd_str}"
+                        )
                         print(f"   Details: {e}")
                         sys.exit(1)
 
@@ -221,24 +235,25 @@ def handle_language(lang_name, clone_path):
     else:
         print("No 'commands.json' found, skipping setup commands.")
 
-    # 3. Copy Config Files (everything *except* the JSON files)
     print(f"Copying configuration files to {HOME_DIR}...")
     ignore_files = shutil.ignore_patterns("packages.json", "commands.json")
-    safe_copy_tree(source_dir, HOME_DIR, ignore_patterns=ignore_files)
+    copy(source_dir, HOME_DIR, ignore_patterns=ignore_files)
 
     print(f"🎉 Done! Language '{lang_name}' environment setup complete.")
 
-# --- Main Execution ---
+
+# main()
+
 
 def main():
     parser = argparse.ArgumentParser(
-        description="spacefin-cli: A tool to set up themes and language environments.",
-        epilog="Example: spacefin-cli theme dracula"
+        description="Spacefin-cli: setup your computer",
+        epilog="Example: spacefin-cli theme Cosmic",
     )
     parser.add_argument(
         "--user",
         metavar="REPO_URL",
-        help="Use a custom repository URL instead of the default."
+        help="Use a custom repository.",
     )
 
     subparsers = parser.add_subparsers(
@@ -246,33 +261,27 @@ def main():
         required=True,
         title="Commands",
         metavar="<command>",
-        help="The action to perform."
+        help="The action to perform.",
     )
 
     # 'theme' subcommand
     theme_parser = subparsers.add_parser(
         "theme",
         help="Install a theme.",
-        description="Clones the repo, finds the theme in the 'themes/' folder, "
-                    "and copies its contents to your home directory (~/)."
+        description="Apply a user specified theme.",
     )
     theme_parser.add_argument(
-        "name",
-        help="Name of the theme to install (e.g., 'dracula')."
+        "name", help="Name of the theme to install (e.g., 'dracula')."
     )
 
     # 'language' subcommand
     lang_parser = subparsers.add_parser(
         "language",
         help="Install a language environment.",
-        description="Clones the repo, finds the language in the 'languages/' folder, "
-                    "installs packages from 'packages.json', runs commands from "
-                    "'commands.json', and copies all other config files "
-                    "to your home directory (~/)."
+        description="Install full preconfigured development environment for the specified language.",
     )
     lang_parser.add_argument(
-        "name",
-        help="Name of the language to set up (e.g., 'python')."
+        "name", help="Name of the language to set up (e.g., 'python')."
     )
 
     # Handle case where no arguments are given
@@ -303,8 +312,10 @@ def main():
         except Exception as e:
             print(f"❌ An unexpected critical error occurred: {e}")
             import traceback
+
             traceback.print_exc()
             sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
