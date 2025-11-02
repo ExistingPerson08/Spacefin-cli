@@ -33,7 +33,6 @@ def confirm_user_repo(repo_url):
 def clone_repo(repo_url, temp_dir):
     """Clone repository"""
     clone_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
-    print(f"🌍 Cloning repository from {repo_url}...")
 
     try:
         subprocess.run(
@@ -114,7 +113,7 @@ def list_available(path, item_type):
 
 def list_available_scripts(path):
     """Lists available scripts"""
-    print(f"\nAvailable scripts:")
+    print(f"\nAvailable commands:")
     if not os.path.isdir(path):
         print(f"   (Could not find 'run' directory in repository)")
         return
@@ -131,12 +130,12 @@ def list_available_scripts(path):
                 scripts.append(item[:-3])  # Remove .sh
 
         if not scripts:
-            print(f"   (No scripts found)")
+            print(f"   (No commands found)")
         else:
             for script in sorted(scripts):
                 print(f"  - {script}")
     except OSError as e:
-        print(f"   (Error listing scripts: {e})")
+        print(f"   (Error listing commands: {e})")
 
 
 def copy(source, dest, ignore_patterns=None):
@@ -271,12 +270,12 @@ def handle_language(lang_name, clone_path):
 
 def handle_run(script_name, clone_path):
     """Handles the execution of a script."""
-    print(f"🔄 Running script: {script_name}")
+    print(f"🔄 Running command: {script_name}")
     run_dir = os.path.join(clone_path, "run")
     script_path = os.path.join(run_dir, f"{script_name}.sh")
 
     if not os.path.isfile(script_path):
-        print(f"❌ ERROR: Script '{script_name}.sh' not found in repository 'run' folder.")
+        print(f"❌ ERROR: Command '{script_name}' not found.")
         list_available_scripts(run_dir)
         sys.exit(1)
 
@@ -288,8 +287,11 @@ def handle_run(script_name, clone_path):
         sys.exit(1)
 
     # Run the script using bash
-    run_command(["bash", script_path])
-    print(f"🎉 Done! Script '{script_name}' executed.")
+    try:
+        subprocess.run(["bash", script_path], check=True)
+    except subprocess.SubprocessError as e:
+        print(f"❌ ERROR: Failed to run command: {e}")
+        sys.exit(1)
 
 
 # main()
@@ -337,12 +339,10 @@ def main():
     # 'run' subcommand
     run_parser = subparsers.add_parser(
         "run",
-        help="Run a script from the repository.",
-        description="Run a .sh script from the 'run' folder in the repository.",
+        help="Run a script.",
+        description="Run a script.",
     )
-    run_parser.add_argument(
-        "name", help="Name of the script to run (without .sh extension)."
-    )
+    run_parser.add_argument("name", help="Name of the command to run.")
 
     # Handle case where no arguments are given
     if len(sys.argv) == 1:
