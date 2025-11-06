@@ -1,0 +1,10 @@
+{
+  "flatpak": [
+    "org.gimp.GIMP",
+    "com.obsproject.Studio",
+    "org.inkscape.Inkscape",
+    "org.freecadweb.FreeCAD",
+    "com.logseq.Logseq"
+  ],
+  "brew": ["neovim", "htop", "lazygit", "fzf", "ripgrep"]
+}

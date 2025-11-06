@@ -15,369 +15,444 @@ HOME_DIR = os.path.expanduser("~")
 
 
 def confirm_user_repo(repo_url):
-    """Confirm user repository."""
-    print(f"⚠️  WARNING: You are about to use a custom repository:")
-    print(f"   {repo_url}")
-    print("   This could be insecure. Only proceed if you trust the source.")
-    try:
-        choice = input("   Do you want to continue? [y/N]: ").strip().lower()
-    except EOFError:
-        choice = "n"
+    """Confirm user repository."""
+    print(f"⚠️  WARNING: You are about to use a custom repository:")
+    print(f"   {repo_url}")
+    print("   This could be insecure. Only proceed if you trust the source.")
+    try:
+        choice = input("   Do you want to continue? [y/N]: ").strip().lower()
+    except EOFError:
+        choice = "n"
 
-    if choice != "y":
-        print("❌ Aborting.")
-        sys.exit(0)
-    print("Proceeding with custom repository.")
+    if choice != "y":
+        print("❌ Aborting.")
+        sys.exit(0)
+    print("Proceeding with custom repository.")
 
 
 def clone_repo(repo_url, temp_dir):
-    """Clone repository"""
-    clone_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
+    """Clone repository"""
+    clone_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
 
-    try:
-        subprocess.run(
-            ["git", "clone", "--depth", "1", repo_url, clone_path],
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
-        return clone_path
-    except FileNotFoundError:
-        print(f"❌ ERROR: 'git' command not found. Please make sure git is installed.")
-        sys.exit(1)
-    except subprocess.CalledProcessError as e:
-        print(f"❌ ERROR: Failed to clone repository.")
-        if e.stderr:
-            print(f"   Details: {e.stderr.strip()}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ ERROR: An unexpected error occurred during cloning: {e}")
-        sys.exit(1)
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", repo_url, clone_path],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        return clone_path
+    except FileNotFoundError:
+        print(f"❌ ERROR: 'git' command not found. Please make sure git is installed.")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ ERROR: Failed to clone repository.")
+        if e.stderr:
+            print(f"   Details: {e.stderr.strip()}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: An unexpected error occurred during cloning: {e}")
+        sys.exit(1)
 
 
 def run_command(command_args):
-    """Run a shell command"""
-    command_for_log = " ".join(shlex.quote(s) for s in command_args)
-    print(f"Running command: {command_for_log}")
-    try:
-        # Run and stream output
-        with subprocess.Popen(
-            command_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            bufsize=1,
-        ) as proc:
-            if proc.stdout:
-                for line in proc.stdout:
-                    print(f"   > {line.strip()}", flush=True)
+    """Run a shell command"""
+    command_for_log = " ".join(shlex.quote(s) for s in command_args)
+    print(f"Running command: {command_for_log}")
+    try:
+        # Run and stream output
+        with subprocess.Popen(
+            command_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
+        ) as proc:
+            if proc.stdout:
+                for line in proc.stdout:
+                    print(f"   > {line.strip()}", flush=True)
 
-            proc.wait()  # Wait for the process to complete
+            proc.wait()  # Wait for the process to complete
 
-            if proc.returncode != 0:
-                print(f"❌ ERROR: Command failed with exit code {proc.returncode}")
-                sys.exit(1)
+            if proc.returncode != 0:
+                print(f"❌ ERROR: Command failed with exit code {proc.returncode}")
+                sys.exit(1)
 
-    except FileNotFoundError:
-        print(f"❌ ERROR: Command not found: {command_args[0]}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ ERROR: Failed to run command: {e}")
-        sys.exit(1)
+    except FileNotFoundError:
+        print(f"❌ ERROR: Command not found: {command_args[0]}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: Failed to run command: {e}")
+        sys.exit(1)
 
 
 def list_available(path, item_type):
-    """Lists available items (themes/languages)"""
-    print(f"\nAvailable {item_type}:")
-    if not os.path.isdir(path):
-        print(f"   (Could not find '{item_type}' directory in repository)")
-        return
-    try:
-        items = []
-        for item in os.listdir(path):
-            item_path = os.path.join(path, item)
-            # Check if it is a directory and not hidden
-            if os.path.isdir(item_path) and not item.startswith("."):
-                items.append(item)
+    """Lists available items (themes/languages)"""
+    print(f"\nAvailable {item_type}:")
+    if not os.path.isdir(path):
+        print(f"   (Could not find '{item_type}' directory in repository)")
+        return
+    try:
+        items = []
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
+            # Check if it is a directory and not hidden
+            if os.path.isdir(item_path) and not item.startswith("."):
+                items.append(item)
 
-        if not items:
-            print(f"   (No {item_type} found)")
-        else:
-            for item in sorted(items):
-                print(f"  - {item}")
-    except OSError as e:
-        print(f"   (Error listing {item_type}: {e})")
+        if not items:
+            print(f"   (No {item_type} found)")
+        else:
+            for item in sorted(items):
+                print(f"  - {item}")
+    except OSError as e:
+        print(f"   (Error listing {item_type}: {e})")
 
 
 def list_available_scripts(path):
-    """Lists available scripts"""
-    print(f"\nAvailable commands:")
-    if not os.path.isdir(path):
-        print(f"   (Could not find 'run' directory in repository)")
-        return
-    try:
-        scripts = []
-        for item in os.listdir(path):
-            item_path = os.path.join(path, item)
-            # Check if it is a file, ends with .sh, and not hidden
-            if (
-                os.path.isfile(item_path)
-                and item.endswith(".sh")
-                and not item.startswith(".")
-            ):
-                scripts.append(item[:-3])  # Remove .sh
+    """Lists available scripts"""
+    print(f"\nAvailable commands:")
+    if not os.path.isdir(path):
+        print(f"   (Could not find 'run' directory in repository)")
+        return
+    try:
+        scripts = []
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
+            # Check if it is a file, ends with .sh, and not hidden
+            if (
+                os.path.isfile(item_path)
+                and item.endswith(".sh")
+                and not item.startswith(".")
+            ):
+                scripts.append(item[:-3])  # Remove .sh
 
-        if not scripts:
-            print(f"   (No commands found)")
-        else:
-            for script in sorted(scripts):
-                print(f"  - {script}")
-    except OSError as e:
-        print(f"   (Error listing commands: {e})")
+        if not scripts:
+            print(f"   (No commands found)")
+        else:
+            for script in sorted(scripts):
+                print(f"  - {script}")
+    except OSError as e:
+        print(f"   (Error listing commands: {e})")
 
+def list_available_bundles(path):
+    """Lists available install bundles"""
+    print(f"\nAvailable bundles:")
+    if not os.path.isdir(path):
+        print(f"   (Could not find 'install' directory in repository)")
+        return
+    try:
+        bundles = []
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
+            # Check if it is a file, ends with .json, and not hidden
+            if (
+                os.path.isfile(item_path)
+                and item.endswith(".json")
+                and not item.startswith(".")
+            ):
+                bundles.append(item[:-5])  # Remove .json
+
+        if not bundles:
+            print(f"   (No bundles found)")
+        else:
+            for bundle in sorted(bundles):
+                print(f"  - {bundle}")
+    except OSError as e:
+        print(f"   (Error listing bundles: {e})")
 
 def copy(source, dest, ignore_patterns=None):
-    """Wrapper for shutil.copytree with dirs_exist_ok and error handling."""
-    print(f"📂 Copying files from '{os.path.basename(source)}' to '{dest}'...")
-    try:
-        shutil.copytree(source, dest, dirs_exist_ok=True, ignore=ignore_patterns)
-    except TypeError:
-        # Fallback for Python < 3.8 which lacks dirs_exist_ok
-        print("⚠️  WARNING: Your Python version is older (pre-3.8).")
-        print("    Falling back to less robust copy method.")
-        try:
-            from distutils.dir_util import copy_tree
+    """Wrapper for shutil.copytree with dirs_exist_ok and error handling."""
+    print(f"📂 Copying files from '{os.path.basename(source)}' to '{dest}'...")
+    try:
+        shutil.copytree(source, dest, dirs_exist_ok=True, ignore=ignore_patterns)
+    except TypeError:
+        # Fallback for Python < 3.8 which lacks dirs_exist_ok
+        print("⚠️  WARNING: Your Python version is older (pre-3.8).")
+        print("    Falling back to less robust copy method.")
+        try:
+            from distutils.dir_util import copy_tree
 
-            copy_tree(source, dest)
-        except ImportError:
-            print(
-                "❌ ERROR: 'distutils' not found. Cannot copy files on this Python version."
-            )
-            print("   Please upgrade to Python 3.8 or newer.")
-            sys.exit(1)
-        except Exception as e:
-            print(f"❌ ERROR: Failed to copy files with distutils fallback: {e}")
-            sys.exit(1)
-    except Exception as e:
-        print(f"❌ ERROR: Failed to copy files.")
-        print(f"   Details: {e}")
-        sys.exit(1)
+            copy_tree(source, dest)
+        except ImportError:
+            print(
+                "❌ ERROR: 'distutils' not found. Cannot copy files on this Python version."
+            )
+            print("   Please upgrade to Python 3.8 or newer.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ ERROR: Failed to copy files with distutils fallback: {e}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: Failed to copy files.")
+        print(f"   Details: {e}")
+        sys.exit(1)
 
 
 # Main functions
 
 
 def handle_theme(theme_name, clone_path):
-    """Handles the installation of a theme."""
-    print(f"🔄 Installing theme: {theme_name}")
-    themes_dir = os.path.join(clone_path, "themes")
-    source_dir = os.path.join(themes_dir, theme_name)
+    """Handles the installation of a theme."""
+    print(f"🔄 Installing theme: {theme_name}")
+    themes_dir = os.path.join(clone_path, "themes")
+    source_dir = os.path.join(themes_dir, theme_name)
 
-    if not os.path.isdir(source_dir):
-        print(f"❌ ERROR: Theme '{theme_name}' not found in repository.")
-        list_available(themes_dir, "themes")
-        sys.exit(1)
+    if not os.path.isdir(source_dir):
+        print(f"❌ ERROR: Theme '{theme_name}' not found in repository.")
+        list_available(themes_dir, "themes")
+        sys.exit(1)
 
-    copy(source_dir, HOME_DIR)
-    print(f"🎉 Done! Theme '{theme_name}' applied.")
+    copy(source_dir, HOME_DIR)
+    print(f"🎉 Done! Theme '{theme_name}' applied.")
 
-    try:
-        run_command(["killall", "cosmic-panel"])
-    except Exception as e:
-        print(f"Please, log out and log back to prevent issues.")
-        sys.exit(1)
+    try:
+        run_command(["killall", "cosmic-panel"])
+    except Exception as e:
+        print(f"Please, log out and log back to prevent issues.")
+        sys.exit(1)
 
 
 def handle_language(lang_name, clone_path):
-    """Handles the installation of a language environment."""
-    print(f"🔄 Installing language environment: {lang_name}")
-    lang_dir = os.path.join(clone_path, "languages")
-    source_dir = os.path.join(lang_dir, lang_name)
+    """Handles the installation of a language environment."""
+    print(f"🔄 Installing language environment: {lang_name}")
+    lang_dir = os.path.join(clone_path, "languages")
+    source_dir = os.path.join(lang_dir, lang_name)
 
-    if not os.path.isdir(source_dir):
-        print(f"❌ ERROR: Language '{lang_name}' not found in repository.")
-        list_available(lang_dir, "languages")
-        sys.exit(1)
+    if not os.path.isdir(source_dir):
+        print(f"❌ ERROR: Language '{lang_name}' not found in repository.")
+        list_available(lang_dir, "languages")
+        sys.exit(1)
 
-    packages_json_path = os.path.join(source_dir, "packages.json")
-    commands_json_path = os.path.join(source_dir, "commands.json")
+    packages_json_path = os.path.join(source_dir, "packages.json")
+    commands_json_path = os.path.join(source_dir, "commands.json")
 
-    if os.path.exists(packages_json_path):
-        print("Found 'packages.json', processing...")
-        try:
-            with open(packages_json_path, "r", encoding="utf-8") as f:
-                packages_data = json.load(f)
+    if os.path.exists(packages_json_path):
+        print("Found 'packages.json', processing...")
+        try:
+            with open(packages_json_path, "r", encoding="utf-8") as f:
+                packages_data = json.load(f)
 
-            # Example: only 'brew' is supported, based on original script
-            brew_packages = packages_data.get("brew")
-            if brew_packages and isinstance(brew_packages, list):
-                print("Installing Homebrew packages...")
-                run_command(["brew", "install"] + brew_packages)
-            # Future: add "apt", "pacman" etc. here
+            # Example: only 'brew' is supported, based on original script
+            brew_packages = packages_data.get("brew")
+            if brew_packages and isinstance(brew_packages, list):
+                print("Installing Homebrew packages...")
+                run_command(["brew", "install"] + brew_packages)
+            # Future: add "apt", "pacman" etc. here
 
-        except json.JSONDecodeError:
-            print(f"❌ ERROR: 'packages.json' for '{lang_name}' is corrupt.")
-            sys.exit(1)
-        except Exception as e:
-            print(f"❌ ERROR: Failed processing 'packages.json': {e}")
-            sys.exit(1)
-    else:
-        print("No 'packages.json' found, skipping package installation.")
+        except json.JSONDecodeError:
+            print(f"❌ ERROR: 'packages.json' for '{lang_name}' is corrupt.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ ERROR: Failed processing 'packages.json': {e}")
+            sys.exit(1)
+    else:
+        print("No 'packages.json' found, skipping package installation.")
 
-    if os.path.exists(commands_json_path):
-        print("Found 'commands.json', processing...")
-        try:
-            with open(commands_json_path, "r", encoding="utf-8") as f:
-                commands_list = json.load(f)
+    if os.path.exists(commands_json_path):
+        print("Found 'commands.json', processing...")
+        try:
+            with open(commands_json_path, "r", encoding="utf-8") as f:
+                commands_list = json.load(f)
 
-            if commands_list and isinstance(commands_list, list):
-                print("Running setup commands...")
-                for cmd_str in commands_list:
-                    if not isinstance(cmd_str, str):
-                        print(
-                            f"⚠️  WARNING: Skipping non-string command in 'commands.json': {cmd_str}"
-                        )
-                        continue
-                    try:
-                        # Split command string into arguments
-                        cmd_args = shlex.split(cmd_str)
-                        if cmd_args:  # Ensure not an empty string
-                            run_command(cmd_args)
-                    except ValueError as e:
-                        print(
-                            f"❌ ERROR: Badly formatted command in 'commands.json': {cmd_str}"
-                        )
-                        print(f"   Details: {e}")
-                        sys.exit(1)
+            if commands_list and isinstance(commands_list, list):
+                print("Running setup commands...")
+                for cmd_str in commands_list:
+                    if not isinstance(cmd_str, str):
+                        print(
+                            f"⚠️  WARNING: Skipping non-string command in 'commands.json': {cmd_str}"
+                        )
+                        continue
+                    try:
+                        # Split command string into arguments
+                        cmd_args = shlex.split(cmd_str)
+                        if cmd_args:  # Ensure not an empty string
+                            run_command(cmd_args)
+                    except ValueError as e:
+                        print(
+                            f"❌ ERROR: Badly formatted command in 'commands.json': {cmd_str}"
+                        )
+                        print(f"   Details: {e}")
+                        sys.exit(1)
 
-        except json.JSONDecodeError:
-            print(f"❌ ERROR: 'commands.json' for '{lang_name}' is corrupt.")
-            sys.exit(1)
-        except Exception as e:
-            print(f"❌ ERROR: Failed processing 'commands.json': {e}")
-            sys.exit(1)
-    else:
-        print("No 'commands.json' found, skipping setup commands.")
+        except json.JSONDecodeError:
+            print(f"❌ ERROR: 'commands.json' for '{lang_name}' is corrupt.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ ERROR: Failed processing 'commands.json': {e}")
+            sys.exit(1)
+    else:
+        print("No 'commands.json' found, skipping setup commands.")
 
-    print(f"Copying configuration files to {HOME_DIR}...")
-    ignore_files = shutil.ignore_patterns("packages.json", "commands.json")
-    copy(source_dir, HOME_DIR, ignore_patterns=ignore_files)
+    print(f"Copying configuration files to {HOME_DIR}...")
+    ignore_files = shutil.ignore_patterns("packages.json", "commands.json")
+    copy(source_dir, HOME_DIR, ignore_patterns=ignore_files)
 
-    print(f"🎉 Done! Language '{lang_name}' environment setup complete.")
+    print(f"🎉 Done! Language '{lang_name}' environment setup complete.")
 
 
 def handle_run(script_name, clone_path):
-    """Handles the execution of a script."""
-    print(f"🔄 Running command: {script_name}")
-    run_dir = os.path.join(clone_path, "run")
-    script_path = os.path.join(run_dir, f"{script_name}.sh")
+    """Handles the execution of a script."""
+    print(f"🔄 Running command: {script_name}")
+    run_dir = os.path.join(clone_path, "run")
+    script_path = os.path.join(run_dir, f"{script_name}.sh")
 
-    if not os.path.isfile(script_path):
-        print(f"❌ ERROR: Command '{script_name}' not found.")
-        list_available_scripts(run_dir)
-        sys.exit(1)
+    if not os.path.isfile(script_path):
+        print(f"❌ ERROR: Command '{script_name}' not found.")
+        list_available_scripts(run_dir)
+        sys.exit(1)
 
-    try:
-        # Make the script executable
-        os.chmod(script_path, 0o755)
-    except Exception as e:
-        print(f"❌ ERROR: Failed to make script executable: {e}")
-        sys.exit(1)
+    try:
+        # Make the script executable
+        os.chmod(script_path, 0o755)
+    except Exception as e:
+        print(f"❌ ERROR: Failed to make script executable: {e}")
+        sys.exit(1)
 
-    # Run the script using bash
-    try:
-        subprocess.run(["bash", script_path], check=True)
-    except subprocess.SubprocessError as e:
-        print(f"❌ ERROR: Failed to run command: {e}")
-        sys.exit(1)
+    # Run the script using bash
+    try:
+        subprocess.run(["bash", script_path], check=True)
+    except subprocess.SubprocessError as e:
+        print(f"❌ ERROR: Failed to run command: {e}")
+        sys.exit(1)
 
+def handle_install(bundle_name, clone_path):
+    """Handles the installation of a software bundle."""
+    print(f"🔄 Installing bundle: {bundle_name}")
+    install_dir = os.path.join(clone_path, "install")
+    json_path = os.path.join(install_dir, f"{bundle_name}.json")
 
-# main()
+    if not os.path.isfile(json_path):
+        print(f"❌ ERROR: Bundle '{bundle_name}.json' not found in repository.")
+        list_available_bundles(install_dir)
+        sys.exit(1)
 
+    print(f"Found '{bundle_name}.json', processing...")
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            bundle_data = json.load(f)
+
+        # Install Flatpak packages
+        flatpak_packages = bundle_data.get("flatpak")
+        if flatpak_packages and isinstance(flatpak_packages, list):
+            print("Installing Flatpak packages...")
+            # Add -y for non-interactive install
+            run_command(["flatpak", "install", "-y"] + flatpak_packages)
+        else:
+            print("No Flatpak packages to install.")
+
+        # Install Brew packages
+        brew_packages = bundle_data.get("brew")
+        if brew_packages and isinstance(brew_packages, list):
+            print("Installing Homebrew packages...")
+            run_command(["brew", "install"] + brew_packages)
+        else:
+            print("No Homebrew packages to install.")
+
+    except json.JSONDecodeError:
+        print(f"❌ ERROR: '{bundle_name}.json' is corrupt.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: Failed processing '{bundle_name}.json': {e}")
+        sys.exit(1)
+
+    print(f"🎉 Done! Bundle '{bundle_name}' installation complete.")
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Spacefin-cli: setup your computer",
-        epilog="Example: spacefin-cli theme Cosmic",
-    )
-    parser.add_argument(
-        "--user",
-        metavar="REPO_URL",
-        help="Use a custom repository.",
-    )
+    parser = argparse.ArgumentParser(
+        description="Spacefin-cli: setup your computer",
+        epilog="Example: spacefin-cli theme Cosmic",
+    )
+    parser.add_argument(
+        "--user",
+        metavar="REPO_URL",
+        help="Use a custom repository.",
+    )
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        required=True,
-        title="Commands",
-        metavar="<command>",
-        help="The action to perform.",
-    )
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        title="Commands",
+        metavar="<command>",
+        help="The action to perform.",
+    )
 
-    # 'theme' subcommand
-    theme_parser = subparsers.add_parser(
-        "theme",
-        help="Install a theme.",
-        description="Apply a user specified theme.",
-    )
-    theme_parser.add_argument(
-        "name", help="Name of the theme to install (e.g., 'dracula')."
-    )
+    # 'theme' subcommand
+    theme_parser = subparsers.add_parser(
+        "theme",
+        help="Install a theme.",
+        description="Apply a user specified theme.",
+    )
+    theme_parser.add_argument(
+        "name", help="Name of the theme to install (e.g., 'dracula')."
+    )
 
-    # 'language' subcommand
-    lang_parser = subparsers.add_parser(
-        "language",
-        help="Install a language environment.",
-        description="Install full preconfigured development environment for the specified language.",
-    )
-    lang_parser.add_argument(
-        "name", help="Name of the language to set up (e.g., 'python')."
-    )
+    # 'language' subcommand
+    lang_parser = subparsers.add_parser(
+        "language",
+        help="Install a language environment.",
+        description="Install full preconfigured development environment for the specified language.",
+    )
+    lang_parser.add_argument(
+        "name", help="Name of the language to set up (e.g., 'python')."
+    )
 
-    # 'run' subcommand
-    run_parser = subparsers.add_parser(
-        "run",
-        help="Run a script.",
-        description="Run a script.",
-    )
-    run_parser.add_argument("name", help="Name of the command to run.")
+    # 'run' subcommand
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run a script.",
+        description="Run a script.",
+    )
+    run_parser.add_argument("name", help="Name of the command to run.")
 
-    # Handle case where no arguments are given
-    if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
+    # 'install' subcommand
+    install_parser = subparsers.add_parser(
+        "install",
+        help="Install a software bundle.",
+        description="Install a bundle of applications from a .json file.",
+    )
+    install_parser.add_argument(
+        "name", help="Name of the bundle to install."
+    )
 
-    args = parser.parse_args()
+    # Handle case where no arguments are given
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
 
-    # Determine repository URL
-    if args.user:
-        confirm_user_repo(args.user)
-        repo_url = args.user
-    else:
-        repo_url = DEFAULT_REPO_URL
+    args = parser.parse_args()
 
-    # Use a temporary directory for cloning
-    with tempfile.TemporaryDirectory() as temp_dir:
-        try:
-            clone_path = clone_repo(repo_url, temp_dir)
+    # Determine repository URL
+    if args.user:
+        confirm_user_repo(args.user)
+        repo_url = args.user
+    else:
+        repo_url = DEFAULT_REPO_URL
 
-            # Dispatch to a handler based on the subcommand
-            if args.command == "theme":
-                handle_theme(args.name, clone_path)
-            elif args.command == "language":
-                handle_language(args.name, clone_path)
-            elif args.command == "run":
-                handle_run(args.name, clone_path)
+    # Use a temporary directory for cloning
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            clone_path = clone_repo(repo_url, temp_dir)
 
-        except Exception as e:
-            print(f"❌ An unexpected critical error occurred: {e}")
-            import traceback
+            # Dispatch to a handler based on the subcommand
+            if args.command == "theme":
+                handle_theme(args.name, clone_path)
+            elif args.command == "language":
+                handle_language(args.name, clone_path)
+            elif args.command == "run":
+                handle_run(args.name, clone_path)
+  V         elif args.command == "install":
+                handle_install(args.name, clone_path)
 
-            traceback.print_exc()
-            sys.exit(1)
+        except Exception as e:
+            print(f"❌ An unexpected critical error occurred: {e}")
+            import traceback
+
+            traceback.print_exc()
+            sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    main()
