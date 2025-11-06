@@ -137,6 +137,7 @@ def list_available_scripts(path):
     except OSError as e:
         print(f"   (Error listing commands: {e})")
 
+
 def list_available_bundles(path):
     """Lists available install bundles"""
     print(f"\nAvailable bundles:")
@@ -162,6 +163,7 @@ def list_available_bundles(path):
                 print(f"  - {bundle}")
     except OSError as e:
         print(f"   (Error listing bundles: {e})")
+
 
 def copy(source, dest, ignore_patterns=None):
     """Wrapper for shutil.copytree with dirs_exist_ok and error handling."""
@@ -318,6 +320,7 @@ def handle_run(script_name, clone_path):
         print(f"❌ ERROR: Failed to run command: {e}")
         sys.exit(1)
 
+
 def handle_install(bundle_name, clone_path):
     """Handles the installation of a software bundle."""
     print(f"🔄 Installing bundle: {bundle_name}")
@@ -339,7 +342,7 @@ def handle_install(bundle_name, clone_path):
         if flatpak_packages and isinstance(flatpak_packages, list):
             print("Installing Flatpak packages...")
             # Add -y for non-interactive install
-            run_command(["flatpak", "install", "-y"] + flatpak_packages)
+            run_command(["flatpak", "install", "-y", "--system"] + flatpak_packages)
         else:
             print("No Flatpak packages to install.")
 
@@ -359,6 +362,7 @@ def handle_install(bundle_name, clone_path):
         sys.exit(1)
 
     print(f"🎉 Done! Bundle '{bundle_name}' installation complete.")
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -413,9 +417,7 @@ def main():
         help="Install a software bundle.",
         description="Install a bundle of applications from a .json file.",
     )
-    install_parser.add_argument(
-        "name", help="Name of the bundle to install."
-    )
+    install_parser.add_argument("name", help="Name of the bundle to install.")
 
     # Handle case where no arguments are given
     if len(sys.argv) == 1:
@@ -443,7 +445,7 @@ def main():
                 handle_language(args.name, clone_path)
             elif args.command == "run":
                 handle_run(args.name, clone_path)
-  V         elif args.command == "install":
+            elif args.command == "install":
                 handle_install(args.name, clone_path)
 
         except Exception as e:
