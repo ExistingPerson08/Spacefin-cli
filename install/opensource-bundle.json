@@ -1,4 +1,5 @@
 {
+  "name": "Doporučené open-source aplikace",
   "flatpak": [
     "org.gimp.GIMP",
     "com.obsproject.Studio",
