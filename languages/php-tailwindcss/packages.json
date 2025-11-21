@@ -1,0 +1,3 @@
+{
+  "brew": ["php", "tailwindcss", "watchman"]
+}
