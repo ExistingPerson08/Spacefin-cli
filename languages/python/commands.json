@@ -1,4 +1,1 @@
-[
-  "brew --help",
-  "fastfetch"
-]
+["python3 --version", "python --version"]
