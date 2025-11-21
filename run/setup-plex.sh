@@ -3,7 +3,7 @@
 
 CONFIG_DIR="$HOME/Aplikace/Plex/plexconfig"
 TRANSCODE_DIR="$HOME/Aplikace/Plex/transcode"
-MOVIES_DIR="$HOME/Videa/movies"
+MOVIES_DIR="$HOME/Videa/Filmy"
 MUSIC_DIR="$HOME/Hudba"
 TV_DIR="$HOME/Aplikace/Plex/tv"
 PLEX_USER_ID=$(id -u)
