@@ -1,3 +1,3 @@
 #!/bin/bash
-# name: Aktualizace
+# name: Update
 update
