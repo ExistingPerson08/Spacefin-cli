@@ -1,3 +1,3 @@
 #!/bin/bash
-# name: Battery info
+# name: Fix Bazaar config
 flatpak override --user io.github.kolunmi.Bazaar --filesystem=host-etc
