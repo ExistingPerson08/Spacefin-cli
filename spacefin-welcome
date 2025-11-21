@@ -143,7 +143,7 @@ def load_run_items(clone_path):
         icon = "system-run"
 
         # Vynecháni update.sh
-        if file_name == "update.sh":
+        if script_name == "update":
             continue
 
         try:
