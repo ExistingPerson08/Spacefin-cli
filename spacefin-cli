@@ -7,29 +7,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 
 # Config
-VERSION = "1.0.0"  # Script version
 DEFAULT_REPO_URL = "https://github.com/ExistingPerson08/Spacefin-cli.git"
 REPO_FOLDER_NAME = "spacefin-assets"
 HOME_DIR = os.path.expanduser("~")
-CACHE_DIR = os.path.join(HOME_DIR, ".cache", "spacefin-cli")
-REPO_DIR = os.path.join(CACHE_DIR, REPO_FOLDER_NAME)
-UPDATE_CONFIG_FILE = "update.json"
 
 
-def confirm_user_repo(repo_url, skip_confirm=False):
+def confirm_user_repo(repo_url):
     """Confirm user repository."""
     print(f"⚠️  WARNING: You are about to use a custom repository:")
     print(f"   {repo_url}")
     print("   This could be insecure. Only proceed if you trust the source.")
-
-    if skip_confirm:
-        print("   (Skipping confirmation as requested via --skip-user-warn)")
-        print("Proceeding with custom repository.")
-        return
-
     try:
         choice = input("   Do you want to continue? [y/N]: ").strip().lower()
     except EOFError:
@@ -41,58 +30,33 @@ def confirm_user_repo(repo_url, skip_confirm=False):
     print("Proceeding with custom repository.")
 
 
-def get_repo(repo_url, refresh=False):
-    """Get repository path, handling caching and updates."""
-    if not os.path.exists(CACHE_DIR):
-        os.makedirs(CACHE_DIR)
+def clone_repo(repo_url, temp_dir):
+    """Clone repository"""
+    clone_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
 
-    is_cloned = os.path.isdir(os.path.join(REPO_DIR, ".git"))
-
-    if not is_cloned:
-        print("📥 Cloning repository...")
-        try:
-            subprocess.run(
-                ["git", "clone", repo_url, REPO_DIR],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"❌ ERROR: Failed to clone repository.")
-            if e.stderr:
-                print(f"   Details: {e.stderr.strip()}")
-            sys.exit(1)
-    else:
-        # Check if update is needed (refresh flag or older than 7 days)
-        should_update = refresh
-        if not should_update:
-            try:
-                # Check .git modification time
-                git_dir = os.path.join(REPO_DIR, ".git")
-                last_mtime = os.path.getmtime(git_dir)
-                if (time.time() - last_mtime) > (7 * 24 * 3600):
-                    should_update = True
-            except OSError:
-                should_update = True
-
-        if should_update:
-            print("🔄 Updating cached repository...")
-            try:
-                subprocess.run(
-                    ["git", "-C", REPO_DIR, "pull"],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                )
-            except subprocess.CalledProcessError:
-                print(f"⚠️  WARNING: Failed to update repository. Using cached version.")
-
-    return REPO_DIR
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", repo_url, clone_path],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        return clone_path
+    except FileNotFoundError:
+        print(f"❌ ERROR: 'git' command not found. Please make sure git is installed.")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ ERROR: Failed to clone repository.")
+        if e.stderr:
+            print(f"   Details: {e.stderr.strip()}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: An unexpected error occurred during cloning: {e}")
+        sys.exit(1)
 
 
-def run_command(command_args, check=True):
+def run_command(command_args):
     """Run a shell command"""
     command_for_log = " ".join(shlex.quote(s) for s in command_args)
     print(f"Running command: {command_for_log}")
@@ -112,10 +76,9 @@ def run_command(command_args, check=True):
 
             proc.wait()  # Wait for the process to complete
 
-            if check and proc.returncode != 0:
+            if proc.returncode != 0:
                 print(f"❌ ERROR: Command failed with exit code {proc.returncode}")
                 sys.exit(1)
-            return proc.returncode
 
     except FileNotFoundError:
         print(f"❌ ERROR: Command not found: {command_args[0]}")
@@ -230,48 +193,13 @@ def copy(source, dest, ignore_patterns=None):
         sys.exit(1)
 
 
-def check_version_requirement(required_line):
-    """Checks version requirement from script header line (e.g., '# > 1.0.0')."""
-    try:
-        # Strip comment char and whitespace
-        content = required_line.lstrip("#").strip()
-        parts = content.split()
-        if len(parts) < 2:
-            return True  # Invalid format, ignore
-
-        operator = parts[0]
-        req_ver_str = parts[1]
-
-        # Simple semantic version parser (tuple comparison)
-        def parse_ver(v):
-            return tuple(map(int, v.split(".")))
-
-        current = parse_ver(VERSION)
-        required = parse_ver(req_ver_str)
-
-        if operator == ">":
-            return current > required
-        elif operator == "<":
-            return current < required
-        elif operator == ">=":
-            return current >= required
-        elif operator == "<=":
-            return current <= required
-        elif operator == "=" or operator == "==":
-            return current == required
-
-        return True  # Unknown operator
-    except ValueError:
-        return True  # Parsing failed, ignore
-
-
 # Main functions
 
 
-def handle_theme(theme_name, repo_path):
+def handle_theme(theme_name, clone_path):
     """Handles the installation of a theme."""
     print(f"🔄 Installing theme: {theme_name}")
-    themes_dir = os.path.join(repo_path, "themes")
+    themes_dir = os.path.join(clone_path, "themes")
     source_dir = os.path.join(themes_dir, theme_name)
 
     if not os.path.isdir(source_dir):
@@ -279,43 +207,20 @@ def handle_theme(theme_name, repo_path):
         list_available(themes_dir, "themes")
         sys.exit(1)
 
-    # Check for DE specific folders
-    de_folders = ["niri", "cosmic", "gnome"]
-    found_des = []
-
-    for de in de_folders:
-        de_path = os.path.join(source_dir, de)
-        if os.path.isdir(de_path):
-            dest = os.path.join(HOME_DIR, ".config", de)
-            print(f"🎨 Found {de} configuration. Installing to {dest}...")
-            copy(de_path, dest)
-            found_des.append(de)
-
-    # Copy remaining files to HOME_DIR, excluding DE folders if processed
-    # If no DE folders found, proceed with standard copy
-    # If DE folders found, ignore them in the main copy to avoid duplication in ~
-    ignore_list = found_des if found_des else None
-
-    # Only copy main files if there are files left other than DE folders
-    # Or always copy for backward compatibility? Let's check ignore list.
-    if ignore_list:
-        copy(source_dir, HOME_DIR, ignore_patterns=shutil.ignore_patterns(*ignore_list))
-    else:
-        copy(source_dir, HOME_DIR)
-
+    copy(source_dir, HOME_DIR)
     print(f"🎉 Done! Theme '{theme_name}' applied.")
 
     try:
-        run_command(["killall", "cosmic-panel"], check=False)
-    except Exception:
-        pass
-    print(f"ℹ️  Please log out and log back in to ensure all changes apply.")
+        run_command(["killall", "cosmic-panel"])
+    except Exception as e:
+        print(f"Please, log out and log back to prevent issues.")
+        sys.exit(1)
 
 
-def handle_language(lang_name, repo_path):
+def handle_language(lang_name, clone_path):
     """Handles the installation of a language environment."""
     print(f"🔄 Installing language environment: {lang_name}")
-    lang_dir = os.path.join(repo_path, "languages")
+    lang_dir = os.path.join(clone_path, "languages")
     source_dir = os.path.join(lang_dir, lang_name)
 
     if not os.path.isdir(source_dir):
@@ -332,10 +237,12 @@ def handle_language(lang_name, repo_path):
             with open(packages_json_path, "r", encoding="utf-8") as f:
                 packages_data = json.load(f)
 
+            # Example: only 'brew' is supported, based on original script
             brew_packages = packages_data.get("brew")
             if brew_packages and isinstance(brew_packages, list):
                 print("Installing Homebrew packages...")
                 run_command(["brew", "install"] + brew_packages)
+            # Future: add "apt", "pacman" etc. here
 
         except json.JSONDecodeError:
             print(f"❌ ERROR: 'packages.json' for '{lang_name}' is corrupt.")
@@ -356,13 +263,20 @@ def handle_language(lang_name, repo_path):
                 print("Running setup commands...")
                 for cmd_str in commands_list:
                     if not isinstance(cmd_str, str):
+                        print(
+                            f"⚠️  WARNING: Skipping non-string command in 'commands.json': {cmd_str}"
+                        )
                         continue
                     try:
+                        # Split command string into arguments
                         cmd_args = shlex.split(cmd_str)
-                        if cmd_args:
+                        if cmd_args:  # Ensure not an empty string
                             run_command(cmd_args)
                     except ValueError as e:
-                        print(f"❌ ERROR: Badly formatted command: {cmd_str}")
+                        print(
+                            f"❌ ERROR: Badly formatted command in 'commands.json': {cmd_str}"
+                        )
+                        print(f"   Details: {e}")
                         sys.exit(1)
 
         except json.JSONDecodeError:
@@ -381,10 +295,10 @@ def handle_language(lang_name, repo_path):
     print(f"🎉 Done! Language '{lang_name}' environment setup complete.")
 
 
-def handle_run(script_name, repo_path):
+def handle_run(script_name, clone_path):
     """Handles the execution of a script."""
     print(f"🔄 Running command: {script_name}")
-    run_dir = os.path.join(repo_path, "run")
+    run_dir = os.path.join(clone_path, "run")
     script_path = os.path.join(run_dir, f"{script_name}.sh")
 
     if not os.path.isfile(script_path):
@@ -392,26 +306,14 @@ def handle_run(script_name, repo_path):
         list_available_scripts(run_dir)
         sys.exit(1)
 
-    # Version check (3rd line)
     try:
-        with open(script_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            if len(lines) >= 3:
-                # Expecting format like: # >= 1.0.0
-                if not check_version_requirement(lines[2]):
-                    print(f"❌ ERROR: Script version requirement not met.")
-                    print(f"   Script requires: {lines[2].strip().lstrip('#').strip()}")
-                    print(f"   Current version: {VERSION}")
-                    sys.exit(1)
-    except Exception as e:
-        print(f"⚠️  WARNING: Could not check script version: {e}")
-
-    try:
+        # Make the script executable
         os.chmod(script_path, 0o755)
     except Exception as e:
         print(f"❌ ERROR: Failed to make script executable: {e}")
         sys.exit(1)
 
+    # Run the script using bash
     try:
         subprocess.run(["bash", script_path], check=True)
     except subprocess.SubprocessError as e:
@@ -419,10 +321,10 @@ def handle_run(script_name, repo_path):
         sys.exit(1)
 
 
-def handle_install(bundle_name, repo_path):
+def handle_install(bundle_name, clone_path):
     """Handles the installation of a software bundle."""
     print(f"🔄 Installing bundle: {bundle_name}")
-    install_dir = os.path.join(repo_path, "install")
+    install_dir = os.path.join(clone_path, "install")
     json_path = os.path.join(install_dir, f"{bundle_name}.json")
 
     if not os.path.isfile(json_path):
@@ -435,13 +337,16 @@ def handle_install(bundle_name, repo_path):
         with open(json_path, "r", encoding="utf-8") as f:
             bundle_data = json.load(f)
 
+        # Install Flatpak packages
         flatpak_packages = bundle_data.get("flatpak")
         if flatpak_packages and isinstance(flatpak_packages, list):
             print("Installing Flatpak packages...")
+            # Add -y for non-interactive install
             run_command(["flatpak", "install", "-y", "--system"] + flatpak_packages)
         else:
             print("No Flatpak packages to install.")
 
+        # Install Brew packages
         brew_packages = bundle_data.get("brew")
         if brew_packages and isinstance(brew_packages, list):
             print("Installing Homebrew packages...")
@@ -459,21 +364,18 @@ def handle_install(bundle_name, repo_path):
     print(f"🎉 Done! Bundle '{bundle_name}' installation complete.")
 
 
-def handle_update(args, repo_path):
+def handle_update(args):
     """Handles system update."""
     print("🔄 Starting system update...")
 
-    # 1. Update Repo (Already done in main via get_repo if refresh was needed, but let's ensure)
-    # The --refresh flag in main handles the repo update.
-
-    # 2. System Update
+    # 1. System Update
     print("📦 Updating system...")
     if args.bootc:
         run_command(["sudo", "bootc", "upgrade"])
     else:
         run_command(["rpm-ostree", "upgrade"])
 
-    # 3. Update Flatpaks & Brew
+    # 2. Update Flatpaks & Brew
     print("📦 Updating applications...")
     try:
         run_command(["flatpak", "update", "-y"])
@@ -485,48 +387,13 @@ def handle_update(args, repo_path):
     except Exception:
         print("⚠️  Brew upgrade failed or not present.")
 
-    # 4. Update Distrobox
+    # 3. Update Distrobox
     if args.distrobox:
         print("📦 Updating distroboxes...")
         try:
             run_command(["distrobox-upgrade", "--all"])
         except Exception:
             print("⚠️  Distrobox upgrade failed.")
-
-    # 5. Config Actions
-    if not args.skip_config:
-        config_path = os.path.join(repo_path, UPDATE_CONFIG_FILE)
-        if os.path.isfile(config_path):
-            print(f"⚙️  Processing {UPDATE_CONFIG_FILE}...")
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-
-                update_config = config.get("update", {})
-
-                # Copy files
-                files = update_config.get("files", [])
-                for file_def in files:
-                    src = os.path.join(repo_path, file_def.get("src", ""))
-                    dest = os.path.expanduser(file_def.get("dest", ""))
-                    if os.path.exists(src):
-                        if os.path.isdir(src):
-                            copy(src, dest)
-                        else:
-                            # Ensure dest dir exists
-                            os.makedirs(os.path.dirname(dest), exist_ok=True)
-                            shutil.copy2(src, dest)
-                            print(f"📂 Copied file to {dest}")
-
-                # Run commands
-                cmds = update_config.get("commands", [])
-                for cmd in cmds:
-                    run_command(shlex.split(cmd), check=False)
-
-            except Exception as e:
-                print(f"⚠️  Failed to process config file: {e}")
-        else:
-            print("No extra config file found.")
 
     print("🎉 System update complete!")
 
@@ -540,16 +407,6 @@ def main():
         "--user",
         metavar="REPO_URL",
         help="Use a custom repository.",
-    )
-    parser.add_argument(
-        "--refresh",
-        action="store_true",
-        help="Force refresh of the cached repository.",
-    )
-    parser.add_argument(
-        "--skip-user-warn",
-        action="store_true",
-        help="Skip confirmation for custom repository warning.",
     )
 
     subparsers = parser.add_subparsers(
@@ -621,55 +478,36 @@ def main():
 
     args = parser.parse_args()
 
-    # Determine repository URL logic
-    # Helper to dispatch commands
-    def dispatch(repo_path):
-        if args.command == "theme":
-            handle_theme(args.name, repo_path)
-        elif args.command == "language":
-            handle_language(args.name, repo_path)
-        elif args.command == "run":
-            handle_run(args.name, repo_path)
-        elif args.command == "install":
-            handle_install(args.name, repo_path)
-        elif args.command == "update":
-            handle_update(args, repo_path)
+    # Determine repository URL
+    if args.user:
+        confirm_user_repo(args.user)
+        repo_url = args.user
+    else:
+        repo_url = DEFAULT_REPO_URL
 
-    try:
-        if args.user:
-            confirm_user_repo(args.user, skip_confirm=args.skip_user_warn)
+    # Use a temporary directory for cloning
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            clone_path = clone_repo(repo_url, temp_dir)
 
-            # Use temp dir for user repo (no cache)
-            with tempfile.TemporaryDirectory() as temp_dir:
-                print("📥 Cloning custom repository (temporary)...")
-                repo_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
-                try:
-                    subprocess.run(
-                        ["git", "clone", args.user, repo_path],
-                        check=True,
-                        capture_output=True,
-                        text=True,
-                        encoding="utf-8",
-                    )
-                    dispatch(repo_path)
-                except subprocess.CalledProcessError as e:
-                    print(f"❌ ERROR: Failed to clone repository.")
-                    if e.stderr:
-                        print(f"   Details: {e.stderr.strip()}")
-                    sys.exit(1)
-        else:
-            # Use cached default repo
-            # Auto-refresh if update command is used
-            should_refresh = args.refresh or (args.command == "update")
-            repo_path = get_repo(DEFAULT_REPO_URL, refresh=should_refresh)
-            dispatch(repo_path)
+            # Dispatch to a handler based on the subcommand
+            if args.command == "theme":
+                handle_theme(args.name, clone_path)
+            elif args.command == "language":
+                handle_language(args.name, clone_path)
+            elif args.command == "run":
+                handle_run(args.name, clone_path)
+            elif args.command == "install":
+                handle_install(args.name, clone_path)
+            elif args.command == "update":
+                handle_update(args)
 
-    except Exception as e:
-        print(f"❌ An unexpected critical error occurred: {e}")
-        import traceback
+        except Exception as e:
+            print(f"❌ An unexpected critical error occurred: {e}")
+            import traceback
 
-        traceback.print_exc()
-        sys.exit(1)
+            traceback.print_exc()
+            sys.exit(1)
 
 
 if __name__ == "__main__":
