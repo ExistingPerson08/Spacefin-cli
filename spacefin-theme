@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import traceback
+
+DEFAULT_REPO_URL = "https://github.com/ExistingPerson08/Spacefin-cli.git"
+REPO_FOLDER_NAME = "spacefin-assets"
+HOME_DIR = os.path.expanduser("~")
+THEMES_SUBDIR = "themes"
+
+
+def setup_argparse():
+    parser = argparse.ArgumentParser(
+        description="spacefin-theme: Apply themes.",
+        formatter_class=argparse.RawTextHelpFormatter,
+        add_help=True,
+    )
+
+    parser.add_argument(
+        "-u",
+        "--user",
+        help=f"Use a custom repository URL (e.g., https://github.com/myuser/myrepo.git). Default: {DEFAULT_REPO_URL}",
+    )
+
+    parser.add_argument(
+        "name",
+        help="Name of the theme to apply (e.g., 'Cosmic', 'Spacefin', 'Minimal').",
+    )
+
+    return parser
+
+
+def confirm_user_repo(repo_url):
+    print(f"⚠️  WARNING: You are about to use a custom repository:")
+    print(f"    {repo_url}")
+    print("    This could be insecure. Only proceed if you trust the source.")
+    try:
+        choice = input("    Do you want to continue? [y/N]: ").strip().lower()
+    except EOFError:
+        choice = "n"
+
+    if choice != "y":
+        print("❌ Aborting.")
+        sys.exit(0)
+    print("Proceeding with custom repository.")
+
+
+def clone_repo(repo_url, temp_dir):
+    clone_path = os.path.join(temp_dir, REPO_FOLDER_NAME)
+
+    print(f"🚚 Cloning repository: {repo_url}...")
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", repo_url, clone_path],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        print("✅ Cloning complete.")
+        return clone_path
+    except FileNotFoundError:
+        print(f"❌ ERROR: 'git' command not found. Please make sure git is installed.")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ ERROR: Failed to clone repository.")
+        if e.stderr:
+            print(f"    Details: {e.stderr.strip()}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: An unexpected error occurred during cloning: {e}")
+        sys.exit(1)
+
+
+def copy(source, dest, ignore_patterns=None):
+    print(f"📂 Copying files from '{os.path.basename(source)}' to '{dest}'...")
+    try:
+        shutil.copytree(source, dest, dirs_exist_ok=True, ignore=ignore_patterns)
+    except TypeError:
+        print("⚠️  WARNING: Your Python version is older (pre-3.8).")
+        print("    Falling back to less robust copy method.")
+        try:
+            from distutils.dir_util import copy_tree
+
+            copy_tree(source, dest)
+        except ImportError:
+            print(
+                "❌ ERROR: 'distutils' not found. Cannot copy files on this Python version."
+            )
+            print("    Please upgrade to Python 3.8 or newer.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ ERROR: Failed to copy files with distutils fallback: {e}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ ERROR: Failed to copy files.")
+        print(f"    Details: {e}")
+        sys.exit(1)
+
+
+def list_available(path):
+    print(f"\nAvailable themes:")
+    if not os.path.isdir(path):
+        print(f"    (Could not find '{THEMES_SUBDIR}' directory in repository)")
+        return
+    try:
+        items = []
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
+            if os.path.isdir(item_path) and not item.startswith("."):
+                items.append(item)
+
+        if not items:
+            print(f"    (No themes found)")
+        else:
+            for item in sorted(items):
+                print(f"  - {item}")
+    except OSError as e:
+        print(f"    (Error listing themes: {e})")
+
+
+def handle_theme(theme_name, clone_path):
+    print(f"🔄 Installing theme: {theme_name}")
+    themes_dir = os.path.join(clone_path, THEMES_SUBDIR)
+    source_dir = os.path.join(themes_dir, theme_name)
+
+    if not os.path.isdir(source_dir):
+        print(f"❌ ERROR: Theme '{theme_name}' not found in repository.")
+        list_available(themes_dir)
+        sys.exit(1)
+
+    copy(source_dir, HOME_DIR)
+    print(f"🎉 Done! Theme '{theme_name}' applied.")
+
+    try:
+        subprocess.run(["killall", "cosmic-panel"], check=False, capture_output=True)
+    except Exception:
+        print(f"    Please log out and log back in to apply the theme.")
+        pass
+
+
+def main():
+    parser = setup_argparse()
+
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+
+    args = parser.parse_args()
+
+    if args.user:
+        confirm_user_repo(args.user)
+        repo_url = args.user
+    else:
+        repo_url = DEFAULT_REPO_URL
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            clone_path = clone_repo(repo_url, temp_dir)
+            handle_theme(args.name, clone_path)
+
+        except SystemExit:
+            pass
+        except Exception as e:
+            print(f"❌ An unexpected critical error occurred: {e}")
+            traceback.print_exc()
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
