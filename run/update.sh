@@ -45,19 +45,13 @@ REBOOT_NEEDED=0
 
 # ---------------------------------------------------------------------
 
-# 1. RPM-OSTREE Update
+# 1. Bootc Update
 # rpm-ostree upgrade requires a reboot to complete
-run_update "rpm-ostree" "rpm-ostree upgrade"
+run_update "bootc" "sudo LC_ALL=C.UTF-8 bootc upgrade"
 
-# Check if rpm-ostree has staged a new deployment
-if command -v rpm-ostree &> /dev/null && rpm-ostree status | grep -q 'deployments'; then
-    # Set the flag if a new deployment is staged (usually means a reboot is needed)
-    if rpm-ostree status | grep -q 'unlocked: yes'; then
-        # On unlocked systems, a staged deployment doesn't always strictly require a reboot
-        # but for a kernel/system update, it's best practice.
-        REBOOT_NEEDED=1
-    elif rpm-ostree status | grep -q 'Staging'; then
-        # This is a clearer sign of a pending upgrade on a locked system
+# Check if we need to reboot
+if command -v bootc &> /dev/null; then
+    if bootc status --json | grep -q '"staged"'; then
         REBOOT_NEEDED=1
     fi
 fi
