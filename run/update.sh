@@ -46,12 +46,11 @@ REBOOT_NEEDED=0
 # ---------------------------------------------------------------------
 
 # 1. Bootc Update
-# rpm-ostree upgrade requires a reboot to complete
 run_update "bootc" "sudo LC_ALL=C.UTF-8 bootc upgrade"
 
 # Check if we need to reboot
 if command -v bootc &> /dev/null; then
-    if bootc status --json | grep -q '"staged"'; then
+    if sudo bootc status --json | grep -q '"staged"'; then
         REBOOT_NEEDED=1
     fi
 fi
