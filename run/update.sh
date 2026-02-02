@@ -75,7 +75,7 @@ echo -e "======================================================${NC}"
 
 if [ $REBOOT_NEEDED -eq 1 ]; then
     echo -e "\n${RED}*** REBOOT REQUIRED ***"
-    echo -e "${YELLOW}The 'rpm-ostree' update was successful and a new deployment is staged."
+    echo -e "${YELLOW}The system update was successful and a new deployment is staged."
     echo -e "Please RESTART your system to boot into the new version.${NC}\n"
 else
     echo -e ""
