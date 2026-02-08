@@ -21,8 +21,8 @@ pkgver() {
 package() {
   cd "$pkgname"
 
-  install -d "$pkgdir/usr/bin"
+  install -Dm755 spacefin-cli "$pkgdir/usr/bin/spacefin-cli"
+  install -Dm755 spacefin-welcome "$pkgdir/usr/bin/spacefin-welcome"
 
-  install -m755 spacefin-cli "$pkgdir/usr/bin/spacefin-cli"
-  install -m755 spacefin-welcome "$pkgdir/usr/bin/spacefin-welcome"
+  install -Dm644 spacefin-welcome.desktop "$pkgdir/usr/share/applications/spacefin-welcome.desktop"
 }
